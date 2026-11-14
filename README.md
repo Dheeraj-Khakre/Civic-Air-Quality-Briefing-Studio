@@ -58,6 +58,60 @@ The Windows local startup script also generates a local-only administrator. Sign
 
 The backend's supported persistent database is PostgreSQL; the current migration and entity mappings are PostgreSQL-oriented, so this one-click stack intentionally uses PostgreSQL rather than substituting SQLite/H2 for an end-to-end run.
 
+## End-to-end testing
+
+The end-to-end flow runs the real frontend, backend, and PostgreSQL services together. It does not seed fake environmental readings or require an AI provider.
+
+1. On Windows, start Docker Desktop, open PowerShell in the repository root, and run:
+
+   ```powershell
+   .\start-local.ps1
+   ```
+
+   This creates or repairs the ignored local `.env` with local-only secrets and starts the Compose services. Wait until all services are healthy:
+
+   ```powershell
+   docker compose ps
+   ```
+
+   Check backend health at `http://localhost:8080/actuator/health` and frontend health at `http://localhost:3000/`. Swagger UI is available at `http://localhost:8080/swagger-ui/index.html`.
+
+2. Open `http://localhost:3000` and sign in with the local administrator account:
+
+   - Email: `admin@civic-air.local`
+   - Password: read `CIVIC_LOCAL_ADMIN_PASSWORD` from the ignored `.env`; the script generates a local password rather than using a shared default.
+
+   Alternatively, register an account through the application.
+
+3. Use a small CSV or XLSX file with real or clearly identified test readings, or enter tabular data in the upload form. Submit it and verify that the application shows the dataset, quality report, and any validation issues. Missing readings should remain missing; do not interpret test values as live environmental measurements.
+
+4. Run analysis for the uploaded dataset. Verify the returned summaries and evidence-linked findings, then open recommendations and generate an internal brief or citizen advisory. Try historical comparison and brief history after creating a second analysis/brief. The default local AI configuration is disabled; the application must report that AI is unavailable or use its documented non-AI behavior rather than inventing an AI response. To exercise a configured provider, set its credentials in the ignored `.env` only, restart the backend, and never put keys in frontend configuration.
+
+5. If a step fails, inspect the service logs and status:
+
+   ```powershell
+   docker compose ps
+   docker compose logs --tail 100 backend
+   docker compose logs --tail 100 frontend
+   docker compose logs --tail 100 postgres
+   ```
+
+   Stop the services without deleting test data with `docker compose down`. The named `postgres_data` volume persists across restarts. Only run `docker compose down -v` when you intentionally want to erase the local database and all test records.
+
+For automated checks before the manual UI flow, run these from the repository root:
+
+```powershell
+mvn --batch-mode --no-transfer-progress verify
+Push-Location frontend
+npm ci
+npm test -- --run
+npm run build
+Pop-Location
+docker compose build
+```
+
+The Maven verification includes the backend unit and integration tests; the frontend commands run its test suite and production build. GitHub Actions additionally builds and scans both Docker images. A successful local test/build does not by itself verify a Railway deployment or an external AI provider.
+
 ## Frontend development
 
 The React/TypeScript application is under `frontend/`. It uses Vite, React Router, TanStack Query, Axios, React Hook Form/Zod, Recharts, and Tailwind CSS. Its API client targets `/api/v1`; Vite proxies API and health requests to `http://localhost:8080`, while the Compose Nginx service proxies to the backend container.
@@ -73,6 +127,17 @@ npm run build
 The frontend includes the dashboard, authenticated CSV/XLSX/pasted-data intake, quality reports, deterministic analysis and evidence-linked findings, role-authorized recommendations and briefs, comparison of analyses tracked in the current browser, and brief history. Empty states reflect API data and do not use sample environmental measurements. The backend currently has no API to list all prior analyses, return pollutant time series, or preview raw source rows; comparison choices therefore include analyses created in that browser, dashboard trends are limited to the analysis's returned summary metrics, and upload preview is limited to the API's dataset metadata and quality report until those endpoints are added.
 
 The compose stack runs PostgreSQL with a persistent named volume, applies schema migration `V1` at backend startup, and waits for database/backend health checks. The backend image is a non-root Java 21 runtime image. The default AI configuration is off and has no provider credentials. For Gemini, set `CIVIC_AI_ENABLED=true`, `AI_PROVIDER=google-genai`, `GEMINI_API_KEY`, and `GEMINI_MODEL` in `.env`; for OpenAI set `CIVIC_AI_ENABLED=true`, `AI_PROVIDER=openai`, `SPRING_AI_OPENAI_API_KEY`, and `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL`; for Ollama set `CIVIC_AI_ENABLED=true`, `AI_PROVIDER=ollama`, `SPRING_AI_OLLAMA_CHAT_OPTIONS_MODEL`, and the Ollama base URL. Provider credentials remain server-side.
+
+## Google Cloud deployment (Cloud Run & Cloud SQL)
+
+The application supports serverless multi-container deployment on Google Cloud using **Cloud Run** and managed **Cloud SQL for PostgreSQL**, with secrets managed by **Secret Manager** and container builds handled by **Cloud Build**.
+
+For detailed setup instructions, automated scripts, and architecture details, see the [Google Cloud Deployment Guide](file:///C:/Dheeraj-workSpace/dhee.work/hack2skill-project/GCP_DEPLOYMENT_GUIDE.md):
+
+- **PowerShell (Windows):** `.\deploy\gcp\deploy-gcp.ps1 -ProjectId "<YOUR_GCP_PROJECT_ID>"`
+- **Bash / Cloud Shell:** `chmod +x deploy/gcp/deploy-gcp.sh && ./deploy/gcp/deploy-gcp.sh`
+- **GitHub Actions:** Trigger the `.github/workflows/deploy-gcp.yml` workflow.
+- **Teardown:** `.\deploy\gcp\destroy-gcp.ps1 -ProjectId "<YOUR_GCP_PROJECT_ID>"`
 
 ## CI/CD and Railway deployment
 
