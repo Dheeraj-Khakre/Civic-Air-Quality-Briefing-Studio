@@ -93,7 +93,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ./frontend
-          file: Dockerfile
+          file: frontend/Dockerfile
           tags: civic-air-frontend:ci
           load: true
           cache-from: type=gha,scope=frontend
