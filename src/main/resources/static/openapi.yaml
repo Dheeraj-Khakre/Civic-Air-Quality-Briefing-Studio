@@ -1,0 +1,857 @@
+openapi: 3.1.0
+info:
+  title: Civic Air Quality Briefing Studio API
+  version: 1.0.0
+  description: |
+    Versioned backend API. Dataset uploads, deterministic descriptive analytics,
+    role-scoped recommendations, validated briefs, and compatible historical
+    comparisons are implemented. AQI analysis is rejected unless a documented
+    breakpoint standard is configured.
+servers:
+  - url: /api/v1
+    description: Current backend
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Datasets
+  - name: Analyses
+  - name: Recommendations
+  - name: Briefs
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Register a school account and receive a bearer token
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                password:
+                  type: string
+                  format: password
+                  minLength: 12
+                  maxLength: 72
+      responses:
+        '200':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email is already registered
+  /auth/login:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Exchange credentials for a bearer access token
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /datasets:
+    get:
+      tags: [Datasets]
+      summary: List datasets owned by the authenticated user
+      operationId: listDatasets
+      responses:
+        '200':
+          description: Dataset list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Dataset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Datasets]
+      summary: Upload a CSV or XLSX dataset
+      operationId: uploadDataset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, locationName]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                locationName:
+                  type: string
+                  maxLength: 160
+                periodStart:
+                  type: string
+                  format: date-time
+                  description: Optional declared analysis window start.
+                periodEnd:
+                  type: string
+                  format: date-time
+                  description: Optional declared analysis window end.
+      responses:
+        '202':
+          description: Dataset parsed and stored; validation issues are available in the quality report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: Upload exceeds configured size limit
+        '415':
+          description: File content is not a supported CSV or XLSX format
+  /datasets/pasted:
+    post:
+      tags: [Datasets]
+      summary: Submit pasted tabular records
+      operationId: submitPastedDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PastedDatasetRequest'
+      responses:
+        '202':
+          description: Dataset parsed and stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /datasets/{datasetId}:
+    get:
+      tags: [Datasets]
+      summary: Get dataset processing status and metadata
+      operationId: getDataset
+      parameters:
+        - $ref: '#/components/parameters/DatasetId'
+      responses:
+        '200':
+          description: Dataset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /datasets/{datasetId}/quality-report:
+    get:
+      tags: [Datasets]
+      summary: Get validation issues and normalization decisions
+      operationId: getQualityReport
+      parameters:
+        - $ref: '#/components/parameters/DatasetId'
+      responses:
+        '200':
+          description: Quality report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityReport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /datasets/{datasetId}/analyses:
+    post:
+      tags: [Analyses]
+      summary: Calculate deterministic descriptive analytics for a dataset
+      operationId: analyzeDataset
+      parameters:
+        - $ref: '#/components/parameters/DatasetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisRequest'
+      responses:
+        '201':
+          description: Analysis completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '422':
+          description: Unsupported standard or dataset has no valid normalized measurements
+  /analyses/{analysisId}:
+    get:
+      tags: [Analyses]
+      summary: Get analysis status and deterministic metrics
+      operationId: getAnalysis
+      parameters:
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /analyses/{analysisId}/findings:
+    get:
+      tags: [Analyses]
+      summary: List verified analytical findings and their evidence
+      operationId: listFindings
+      parameters:
+        - $ref: '#/components/parameters/AnalysisId'
+      responses:
+        '200':
+          description: Findings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Finding'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /analyses/{analysisId}/recommendations:
+    get:
+      tags: [Recommendations]
+      summary: Get recommendations for a civic audience
+      operationId: listRecommendations
+      parameters:
+        - $ref: '#/components/parameters/AnalysisId'
+        - name: audience
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/Audience'
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recommendation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /analyses/{analysisId}/briefs:
+    post:
+      tags: [Briefs]
+      summary: Generate a role-specific internal briefing from verified findings
+      operationId: generateBrief
+      parameters:
+        - $ref: '#/components/parameters/AnalysisId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BriefRequest'
+      responses:
+        '201':
+          description: Brief generated and stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brief'
+        '422':
+          description: Insufficient verified evidence to generate a brief
+  /analyses/{analysisId}/citizen-advisories:
+    post:
+      tags: [Briefs]
+      summary: Generate a sourced citizen advisory
+      operationId: generateCitizenAdvisory
+      parameters:
+        - $ref: '#/components/parameters/AnalysisId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BriefRequest'
+      responses:
+        '201':
+          description: Advisory generated and stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brief'
+        '422':
+          description: Insufficient verified evidence to generate an advisory
+  /briefs:
+    get:
+      tags: [Briefs]
+      summary: List brief history owned by the authenticated user
+      operationId: listBriefHistory
+      responses:
+        '200':
+          description: Brief history list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Brief'
+  /briefs/{briefId}:
+    get:
+      tags: [Briefs]
+      summary: Get a stored brief
+      operationId: getBrief
+      parameters:
+        - name: briefId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Brief
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brief'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /briefs/compare:
+    post:
+      tags: [Briefs]
+      summary: Compare two stored analyses with compatible scope
+      operationId: compareBriefs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonRequest'
+      responses:
+        '200':
+          description: Deterministic comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comparison'
+        '409':
+          description: Analyses are not compatible for comparison
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    DatasetId:
+      name: datasetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AnalysisId:
+      name: analysisId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Authentication required or credentials invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Resource not found or not visible to the user
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    ApiError:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        errorCode:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          maxLength: 72
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Token lifetime in seconds
+        user:
+          $ref: '#/components/schemas/UserSummary'
+    UserSummary:
+      type: object
+      required: [id, email, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Audience'
+    Audience:
+      type: string
+      enum: [WARD_OFFICER, HOUSING_SOCIETY, SCHOOL]
+    Dataset:
+      type: object
+      required: [id, name, sourceType, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sourceType:
+          type: string
+          enum: [CSV, XLSX, PASTED]
+        status:
+          type: string
+          const: READY
+        locationName:
+          type: string
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        rowCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    DatasetPage:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dataset'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+    PastedDatasetRequest:
+      type: object
+      required: [name, locationName, delimiter, content]
+      properties:
+        name:
+          type: string
+          maxLength: 160
+        locationName:
+          type: string
+          maxLength: 160
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        delimiter:
+          type: string
+          minLength: 1
+          maxLength: 1
+          enum: [",", ";", "\t"]
+        content:
+          type: string
+          maxLength: 2000000
+          description: Untrusted tabular text; unknown units and missing values are retained as issues.
+    QualityReport:
+      type: object
+      required: [datasetId, status, rowCount, issueCount, issues, normalizationDecisions]
+      properties:
+        datasetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, COMPLETE, FAILED]
+        rowCount:
+          type: integer
+        issueCount:
+          type: integer
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, severity, message]
+            properties:
+              rowNumber:
+                type: integer
+              code:
+                type: string
+              severity:
+                type: string
+                enum: [INFO, WARNING, ERROR]
+              message:
+                type: string
+        normalizationDecisions:
+          type: array
+          items:
+            type: object
+            required: [rowNumber, field, originalValue, decision]
+            properties:
+              rowNumber:
+                type: integer
+              field:
+                type: string
+              originalValue:
+                type: string
+              normalizedValue:
+                type: string
+              decision:
+                type: string
+    AnalysisRequest:
+      type: object
+      required: [standard]
+      properties:
+        standard:
+          type: string
+          const: DESCRIPTIVE_V1
+          description: Descriptive statistics only; AQI standards are not yet configured.
+        ward:
+          type: string
+          maxLength: 120
+    Analysis:
+      type: object
+      required: [id, datasetId, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        datasetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, COMPLETE, FAILED]
+        standard:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    AnalysisResult:
+      type: object
+      required: [id, datasetId, status, standard, createdAt, dataCompleteness, metrics, locations]
+      properties:
+        id:
+          type: string
+          format: uuid
+        datasetId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: COMPLETE
+        standard:
+          type: string
+          const: DESCRIPTIVE_V1
+        createdAt:
+          type: string
+          format: date-time
+        dataCompleteness:
+          type: number
+          minimum: 0
+          maximum: 1
+        metrics:
+          type: array
+          items:
+            type: object
+            required: [pollutant, average, minimum, maximum, unit, observationCount, evidenceIds]
+            properties:
+              pollutant:
+                type: string
+              average:
+                type: number
+              minimum:
+                type: number
+              maximum:
+                type: number
+              unit:
+                type: string
+              observationCount:
+                type: integer
+              evidenceIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+        locations:
+          type: array
+          items:
+            type: object
+            required: [location, pollutant, average, unit, observationCount]
+            properties:
+              location:
+                type: string
+              pollutant:
+                type: string
+              average:
+                type: number
+              unit:
+                type: string
+              observationCount:
+                type: integer
+    Finding:
+      type: object
+      required: [id, category, summary, evidenceIds, confidence]
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+        summary:
+          type: string
+        pollutant:
+          type: string
+        value:
+          type: number
+        unit:
+          type: string
+        evidenceIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Fraction of dataset rows that yielded valid measurements; not statistical uncertainty.
+        limitations:
+          type: array
+          items:
+            type: string
+    Recommendation:
+      type: object
+      required: [id, action, priority, audience, reason, evidenceIds, limitations]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        audience:
+          $ref: '#/components/schemas/Audience'
+        reason:
+          type: string
+        evidenceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        limitations:
+          type: array
+          items:
+            type: string
+    BriefRequest:
+      type: object
+      required: [audience, language, readingLevel]
+      properties:
+        audience:
+          $ref: '#/components/schemas/Audience'
+        language:
+          type: string
+          enum: [en, hi]
+        readingLevel:
+          type: string
+          enum: [SIMPLE, DETAILED]
+    Brief:
+      type: object
+      required: [id, analysisId, type, audience, language, readingLevel, content, evidenceIds, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        analysisId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [INTERNAL, CITIZEN_ADVISORY]
+        audience:
+          $ref: '#/components/schemas/Audience'
+        language:
+          type: string
+          enum: [en, hi]
+        readingLevel:
+          type: string
+          enum: [SIMPLE, DETAILED]
+        content:
+          type: string
+        evidenceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Persisted finding UUIDs that link to the supporting dataset-row evidence.
+        limitations:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+    BriefPage:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Brief'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+    ComparisonRequest:
+      type: object
+      required: [currentAnalysisId, previousAnalysisId]
+      properties:
+        currentAnalysisId:
+          type: string
+          format: uuid
+        previousAnalysisId:
+          type: string
+          format: uuid
+    Comparison:
+      type: object
+      required: [currentAnalysisId, previousAnalysisId, changes, limitations]
+      properties:
+        currentAnalysisId:
+          type: string
+          format: uuid
+        previousAnalysisId:
+          type: string
+          format: uuid
+        changes:
+          type: array
+          items:
+            type: object
+            required: [pollutant, classification, evidenceIds]
+            properties:
+              pollutant:
+                type: string
+              classification:
+                type: string
+                enum: [IMPROVED, WORSENED, UNCHANGED, MISSING_DATA]
+              currentValue:
+                type: number
+              previousValue:
+                type: number
+              unit:
+                type: string
+              evidenceIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+        confidenceChange:
+          type: number
+        limitations:
+          type: array
+          items:
+            type: string
