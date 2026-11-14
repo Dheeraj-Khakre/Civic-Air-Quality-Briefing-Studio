@@ -90,7 +90,7 @@ GitHub Actions runs on pushes to `main`, `develop`, and `dev`, and on pull reque
    | Backend | `/` (repository root) | `Dockerfile` | `Dockerfile`, `.dockerignore`, `pom.xml`, `src/**` | `/actuator/health` |
    | Frontend | `/frontend` | `Dockerfile` | `frontend/**` | `/` |
 
-   Set health-check timeout to 300 seconds (or longer if startup/migrations need it). The backend health endpoint reports the application and datasource health; the frontend image health check tests both the site and its proxied backend health endpoint. Railway should wait for each service's health check before considering its deployment available.
+   Set health-check timeout to 300 seconds (or longer if startup/migrations need it). The backend health endpoint reports the application and datasource health. The frontend image health check tests the site itself; the deployment health monitor checks the frontend-to-backend proxy, and the local Compose health check waits for both services. Railway should wait for each service's health check before considering its deployment available.
 5. Add a Railway PostgreSQL service in **each** environment. Keep it private; attach persistent storage using Railway's managed PostgreSQL volume. The application stores durable records in PostgreSQL. Uploaded source files are parsed and their rows/provenance are persisted in the database; the original upload bytes are not archived, so no application file volume is needed.
 6. Configure the backend environment variables separately in each Railway environment:
 

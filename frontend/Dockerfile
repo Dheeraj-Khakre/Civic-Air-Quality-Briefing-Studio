@@ -10,6 +10,6 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
-ENV PORT=8080 BACKEND_PRIVATE_HOST=backend:8080
+ENV PORT=8080 BACKEND_PRIVATE_HOST=127.0.0.1:8081
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget --quiet --tries=1 --spider "http://127.0.0.1:$PORT/" && wget --quiet --tries=1 --spider "http://127.0.0.1:$PORT/actuator/health"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget --quiet --tries=1 --spider "http://127.0.0.1:$PORT/"
