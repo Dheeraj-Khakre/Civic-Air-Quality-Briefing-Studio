@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.data.domain.Page;
 import com.civicair.briefing.audit.AuditService;
 import com.civicair.briefing.ingestion.DatasetController.PastedDatasetRequest;
 import com.civicair.briefing.normalization.ObservationNormalizer;
@@ -37,8 +36,9 @@ class DatasetServiceTest {
         audit = mock(AuditService.class);
         when(datasets.save(any(DatasetEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(issues.saveAll(any())).thenAnswer(invocation -> new ArrayList<>());
-        service = new DatasetService(datasets, issues, new ObjectMapper(), audit,
-                new ObservationNormalizer(), new DatasetQualityValidator(), new TabularDataParser());
+        var normalizer = new ObservationNormalizer();
+        service = new DatasetService(datasets, issues, audit, normalizer, new TabularDataParser(),
+                new DatasetObservationProcessor(normalizer, new DatasetQualityValidator(), new ObjectMapper()));
     }
 
     @Test

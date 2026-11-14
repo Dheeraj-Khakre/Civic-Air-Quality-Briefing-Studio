@@ -38,12 +38,16 @@ security:
 civic:
   ai:
     enabled: ${CIVIC_AI_ENABLED:false}
+  local-admin:
+    enabled: ${CIVIC_LOCAL_ADMIN_ENABLED:false}
+    email: ${CIVIC_LOCAL_ADMIN_EMAIL:}
+    password: ${CIVIC_LOCAL_ADMIN_PASSWORD:}
 app:
   cors:
     allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
   error:
     include-message: never
     include-stacktrace: never

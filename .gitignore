@@ -5,3 +5,6 @@ target/
 .env.*
 !.env.example
 .idea/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/

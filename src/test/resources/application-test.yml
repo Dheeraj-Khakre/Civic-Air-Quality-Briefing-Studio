@@ -10,3 +10,8 @@ spring:
   ai:
     model:
       chat: none
+civic:
+  local-admin:
+    enabled: true
+    email: admin@civic-air.test
+    password: test-only-admin-password

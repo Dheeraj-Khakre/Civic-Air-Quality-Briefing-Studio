@@ -62,14 +62,14 @@ public class AnalysisController {
     }
 
     @GetMapping("/analyses/{analysisId}/recommendations")
-    @PreAuthorize("hasAuthority('ROLE_' + #audience.name())")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN') or hasAuthority('ROLE_' + #audience.name())")
     public List<RecommendationResponse> recommendations(@PathVariable UUID analysisId,
             @RequestParam Audience audience, JwtAuthenticationToken principal) {
         return recommendations.forAnalysis(analysisId, audience, ownerId(principal));
     }
 
     @PostMapping("/analyses/{analysisId}/briefs")
-    @PreAuthorize("hasAuthority('ROLE_' + #request.audience())")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN') or hasAuthority('ROLE_' + #request.audience())")
     @ResponseStatus(HttpStatus.CREATED)
     public BriefResponse brief(@PathVariable UUID analysisId, @Valid @RequestBody BriefRequest request,
             JwtAuthenticationToken principal) {
@@ -77,7 +77,7 @@ public class AnalysisController {
     }
 
     @PostMapping("/analyses/{analysisId}/citizen-advisories")
-    @PreAuthorize("hasAuthority('ROLE_' + #request.audience())")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN') or hasAuthority('ROLE_' + #request.audience())")
     @ResponseStatus(HttpStatus.CREATED)
     public BriefResponse advisory(@PathVariable UUID analysisId, @Valid @RequestBody BriefRequest request,
             JwtAuthenticationToken principal) {
